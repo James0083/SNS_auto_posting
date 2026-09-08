@@ -21,6 +21,8 @@ type IgJob = {
 
 type JobDetail = { job: IgJob; images: IgImage[]; logs: { message: string; level: string }[] };
 
+type TrendKeyword = { keyword: string; reason: string };
+
 export default function IgPanel() {
   const [keyword, setKeyword] = useState("");
   const [mode, setMode] = useState<"auto" | "experience" | "branding">("auto");
@@ -33,6 +35,9 @@ export default function IgPanel() {
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<number | null>(null);
   const [detail, setDetail] = useState<JobDetail | null>(null);
+  const [trendCandidates, setTrendCandidates] = useState<TrendKeyword[] | null>(null);
+  const [trendLoading, setTrendLoading] = useState(false);
+  const [trendError, setTrendError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -52,6 +57,30 @@ export default function IgPanel() {
         if (pollRef.current) clearInterval(pollRef.current);
       }
     }, 2000);
+  }
+
+  async function fetchTrends() {
+    setTrendLoading(true);
+    setTrendError(null);
+    try {
+      const res = await fetch("/api/ig/trends", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setTrendError(data.error ?? "트렌드 발굴에 실패했습니다.");
+        setTrendCandidates(null);
+        return;
+      }
+      setTrendCandidates(data.keywords);
+    } catch {
+      setTrendError("트렌드 발굴 요청에 실패했습니다.");
+      setTrendCandidates(null);
+    } finally {
+      setTrendLoading(false);
+    }
   }
 
   async function submit() {
@@ -137,7 +166,17 @@ export default function IgPanel() {
           </div>
         )}
 
-        <label>주제/키워드</label>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+          <label style={{ margin: 0 }}>주제/키워드</label>
+          <button
+            type="button"
+            className="secondary"
+            onClick={fetchTrends}
+            disabled={isBusy || trendLoading}
+          >
+            {trendLoading ? "웹에서 트렌드 찾는 중..." : "트렌드 발굴하기"}
+          </button>
+        </div>
         <input
           type="text"
           value={keyword}
@@ -145,6 +184,33 @@ export default function IgPanel() {
           placeholder="예: 제주도 여행, 홈카페"
           disabled={isBusy}
         />
+        <p className="hint">
+          웹 검색으로 실제 화제성을 확인해 주제를 추천합니다. 마음에 드는 후보를 누르면 위 입력칸이
+          채워지고, 그대로 쓰거나 수정한 뒤 생성하면 됩니다.
+        </p>
+
+        {trendError && (
+          <p className="hint" style={{ color: "var(--bad)" }}>
+            {trendError}
+          </p>
+        )}
+
+        {trendCandidates && trendCandidates.length > 0 && (
+          <div className="trend-candidate-list">
+            {trendCandidates.map((c, i) => (
+              <button
+                key={i}
+                type="button"
+                className="trend-candidate"
+                onClick={() => setKeyword(c.keyword)}
+                disabled={isBusy}
+              >
+                <strong>{c.keyword}</strong>
+                <span className="hint">{c.reason}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         <label>작성 유형</label>
         <select value={mode} onChange={(e) => setMode(e.target.value as typeof mode)} disabled={isBusy}>
