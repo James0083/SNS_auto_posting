@@ -28,9 +28,19 @@ function releaseSlot(): void {
   if (next) next();
 }
 
-function runClaudeRaw(prompt: string, timeoutSec: number): Promise<ClaudeResult> {
+function runClaudeRaw(
+  prompt: string,
+  timeoutSec: number,
+  allowedTools?: string[],
+): Promise<ClaudeResult> {
   return new Promise((resolve) => {
     const args = ["-p", "--output-format", "json"];
+    // 기본적으로는 어떤 도구도 자동 승인하지 않는다(텍스트만 생성하는 기존 호출부와 동일하게 유지).
+    // WebSearch처럼 명시적으로 허용한 도구만 --allowedTools로 프롬프트 승인 없이 쓸 수 있게 한다
+    // (permission-prompts 대상이 없는 -p 모드에서는 승인 없이 도구를 쓰면 항상 거부되기 때문).
+    if (allowedTools?.length) {
+      args.push("--allowedTools", ...allowedTools);
+    }
     // CLAUDE_BIN은 환경변수로 바뀔 수 있어 Turbopack이 정적으로 추적할 수 없다 — 의도된 것이므로 무시 처리.
     const child = spawn(/* turbopackIgnore: true */ CLAUDE_BIN, args, { shell: isWin });
 
@@ -83,7 +93,7 @@ function runClaudeRaw(prompt: string, timeoutSec: number): Promise<ClaudeResult>
 
 export async function runClaude(
   prompt: string,
-  opts?: { images?: string[]; system?: string },
+  opts?: { images?: string[]; system?: string; allowedTools?: string[] },
 ): Promise<ClaudeResult> {
   const settings = getSettings();
   await acquireSlot();
@@ -95,7 +105,7 @@ export async function runClaude(
     if (opts?.system) {
       full = `${opts.system}\n\n${full}`;
     }
-    return await runClaudeRaw(full, settings.claudeTimeoutSec);
+    return await runClaudeRaw(full, settings.claudeTimeoutSec, opts?.allowedTools);
   } finally {
     releaseSlot();
   }
@@ -120,14 +130,18 @@ function extractJson(text: string): string | null {
 export async function runClaudeJson<T>(
   prompt: string,
   schema: z.ZodType<T>,
-  opts?: { images?: string[]; system?: string; retries?: number },
+  opts?: { images?: string[]; system?: string; retries?: number; allowedTools?: string[] },
 ): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
   const retries = opts?.retries ?? 2;
   const system = [opts?.system, JSON_INSTRUCTION].filter(Boolean).join("\n\n");
 
   let lastError = "알 수 없는 오류";
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const res = await runClaude(prompt, { images: opts?.images, system });
+    const res = await runClaude(prompt, {
+      images: opts?.images,
+      system,
+      allowedTools: opts?.allowedTools,
+    });
     if (!res.ok) {
       lastError = res.error;
       continue;

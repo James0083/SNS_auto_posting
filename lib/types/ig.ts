@@ -25,6 +25,17 @@ export const IgCaptionOnlyResult = z.object({
 });
 export type IgCaptionOnlyResult = z.infer<typeof IgCaptionOnlyResult>;
 
+export const IgTrendKeyword = z.object({
+  keyword: z.string().min(1), // 게시물 "주제/키워드" 입력칸에 그대로 채워질 값
+  reason: z.string().min(1), // 왜 지금 트렌드인지 — 실제 웹 검색으로 확인한 근거를 한 문장으로
+});
+export type IgTrendKeyword = z.infer<typeof IgTrendKeyword>;
+
+export const IgTrendResult = z.object({
+  keywords: z.array(IgTrendKeyword).min(3).max(5),
+});
+export type IgTrendResult = z.infer<typeof IgTrendResult>;
+
 export const IgJobInput = z.object({
   keyword: z.string().min(1),
   mode: IgMode,

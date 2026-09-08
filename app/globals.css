@@ -287,3 +287,33 @@ pre.script {
 .radio-group input {
   width: auto;
 }
+
+.trend-candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+
+.trend-candidate {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  background: #0f1115;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.trend-candidate:hover {
+  border-color: var(--act);
+}
+
+.trend-candidate .hint {
+  margin-top: 0;
+}
