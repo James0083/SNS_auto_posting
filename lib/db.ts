@@ -64,6 +64,15 @@ function migrate(db: Database.Database) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS ig_titles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ig_post_id INTEGER NOT NULL REFERENCES ig_posts(id) ON DELETE CASCADE,
+      candidate_index INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      chosen INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- 릴스 각색 트랙
     CREATE TABLE IF NOT EXISTS reels_jobs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -106,6 +115,30 @@ function migrate(db: Database.Database) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+
+  // --- 이후 컬럼 추가는 ALTER TABLE로 (migrate()는 CREATE IF NOT EXISTS만 하므로 기존 DB엔 반영 안 됨) ---
+
+  // 인스타그램 게시물 트랙: 해외 콘텐츠 각색 + 배치
+  addColumn(db, "ig_posts", "content_source", "content_source TEXT NOT NULL DEFAULT 'keyword'"); // 'keyword' | 'adapt'
+  addColumn(db, "ig_posts", "source_text", "source_text TEXT"); // content_source='adapt'일 때 각색 원문
+  addColumn(db, "ig_posts", "batch_id", "batch_id TEXT"); // 한 번에 제출한 배치 그룹 id (단건이면 NULL)
+  // 참고: content_source='adapt'이면 source_image_paths_json은 "각색 참고용 원본 캡처" 경로다.
+  // adapt는 항상 photo_source='ai'이므로 photo_source='upload'(직접 촬영 사진 변환)와 상호배타적.
+
+  // 릴스 각색 트랙: 배치
+  addColumn(db, "reels_jobs", "batch_id", "batch_id TEXT");
+
+  // 이미지 편집기(로고·그라데이션·제목 합성) 결과. 원본(local_path)은 그대로 두고
+  // 합성본만 별도 파일·컬럼에 추가한다 — 둘 다 다운로드 zip에 포함하기 위함.
+  addColumn(db, "ig_images", "composited_path", "composited_path TEXT");
+}
+
+// 컬럼이 없을 때만 ALTER TABLE ADD COLUMN 실행 (SQLite는 IF NOT EXISTS를 컬럼에 지원하지 않음).
+function addColumn(db: Database.Database, table: string, column: string, ddl: string) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  }
 }
 
 export function getDb(): Database.Database {

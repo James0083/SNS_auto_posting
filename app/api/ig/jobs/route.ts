@@ -1,17 +1,46 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { IgJobInput } from "@/lib/types/ig";
+import { getSettings } from "@/lib/settings";
+import { IgBatchShared } from "@/lib/types/ig";
 import { IG_IMAGE_DIR } from "@/lib/paths";
 import { runIgJob } from "@/lib/pipeline/ig";
+import { enqueueJob } from "@/lib/pipeline/queue";
 
-export async function GET() {
-  const rows = getDb().prepare("SELECT * FROM ig_posts ORDER BY id DESC LIMIT 30").all();
+export async function GET(req: NextRequest) {
+  const batchId = req.nextUrl.searchParams.get("batch");
+  const db = getDb();
+  const rows = batchId
+    ? db.prepare("SELECT * FROM ig_posts WHERE batch_id = ? ORDER BY id ASC").all(batchId)
+    : db.prepare("SELECT * FROM ig_posts ORDER BY id DESC LIMIT 30").all();
   return NextResponse.json({ jobs: rows });
+}
+
+type ParsedItem = { keyword?: string; sourceText?: string; files: File[] };
+
+function firstLineLabel(text: string): string {
+  const line = text.split("\n").map((l) => l.trim()).find(Boolean) ?? "";
+  return line.length > 30 ? `${line.slice(0, 30)}…` : line || "해외 콘텐츠 각색";
+}
+
+async function saveItemImages(jobId: number, files: File[]): Promise<string[]> {
+  if (files.length === 0) return [];
+  const sourceDir = path.join(IG_IMAGE_DIR, String(jobId), "source");
+  await fs.mkdir(sourceDir, { recursive: true });
+  const saved: string[] = [];
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]!;
+    const ext = path.extname(file.name) || ".jpg";
+    const outPath = path.join(sourceDir, `original_${i + 1}${ext}`);
+    await fs.writeFile(outPath, Buffer.from(await file.arrayBuffer()));
+    saved.push(outPath);
+  }
+  return saved;
 }
 
 export async function POST(req: NextRequest) {
@@ -20,74 +49,114 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
   }
 
-  const files = form.getAll("images").filter((f): f is File => f instanceof File && f.size > 0);
-
-  const raw = {
-    keyword: form.get("keyword"),
+  const shared = IgBatchShared.safeParse({
+    contentSource: form.get("contentSource") ?? "keyword",
     mode: form.get("mode"),
     photoSource: form.get("photoSource") ?? "ai",
     carouselEnabled: form.get("carouselEnabled") === "true",
     carouselCount: Number(form.get("carouselCount") ?? 4),
     imageStyle: form.get("imageStyle") ?? "photo",
-  };
-
-  const parsed = IgJobInput.safeParse(raw);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+  });
+  if (!shared.success) {
+    return NextResponse.json({ error: shared.error.message }, { status: 400 });
   }
-  const input = parsed.data;
+  const opts = shared.data;
+  const isAdapt = opts.contentSource === "adapt";
+  const effectivePhotoSource = isAdapt ? "ai" : opts.photoSource;
 
-  if (input.photoSource === "upload" && files.length === 0) {
+  const count = Number(form.get("count") ?? 0);
+  const { batchMax } = getSettings();
+  if (!Number.isInteger(count) || count < 1) {
+    return NextResponse.json({ error: "생성할 항목이 없습니다." }, { status: 400 });
+  }
+  if (count > batchMax) {
     return NextResponse.json(
-      { error: "직접 촬영한 사진을 최소 1장 업로드해주세요." },
+      { error: `한 번에 최대 ${batchMax}건까지 생성할 수 있습니다.` },
       { status: 400 },
     );
   }
 
-  const db = getDb();
-  const inProgress = db
-    .prepare("SELECT id FROM ig_posts WHERE status IN ('pending','generating') LIMIT 1")
-    .get();
-  if (inProgress) {
-    return NextResponse.json(
-      { error: "이미 진행 중인 인스타그램 게시물 작업이 있습니다." },
-      { status: 409 },
-    );
-  }
+  const items: ParsedItem[] = [];
+  for (let i = 0; i < count; i++) {
+    const files = form
+      .getAll(`images_${i}`)
+      .filter((f): f is File => f instanceof File && f.size > 0);
+    const keyword = (form.get(`keyword_${i}`) as string | null)?.trim() || undefined;
+    const sourceText = (form.get(`sourceText_${i}`) as string | null)?.trim() || undefined;
 
-  // photoSource="upload"면 업로드한 사진 장수가 곧 slide 수. "ai"면 캐러셀 설정을 따른다.
-  const slideCount = input.photoSource === "upload" ? files.length : input.carouselEnabled ? input.carouselCount : 1;
-  const carousel = slideCount > 1 ? 1 : 0;
-
-  const result = db
-    .prepare(
-      `INSERT INTO ig_posts (keyword, mode, carousel, slide_count, image_style, photo_source)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    )
-    .run(input.keyword, input.mode, carousel, slideCount, input.imageStyle, input.photoSource);
-
-  const jobId = Number(result.lastInsertRowid);
-
-  if (input.photoSource === "upload" && files.length) {
-    const sourceDir = path.join(IG_IMAGE_DIR, String(jobId), "source");
-    await fs.mkdir(sourceDir, { recursive: true });
-
-    const savedPaths: string[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i]!;
-      const ext = path.extname(file.name) || ".jpg";
-      const outPath = path.join(sourceDir, `original_${i + 1}${ext}`);
-      const buf = Buffer.from(await file.arrayBuffer());
-      await fs.writeFile(outPath, buf);
-      savedPaths.push(outPath);
+    if (isAdapt) {
+      if (!sourceText && files.length === 0) {
+        return NextResponse.json(
+          { error: `${i + 1}번 항목: 원문 텍스트나 이미지 중 하나는 필요합니다.` },
+          { status: 400 },
+        );
+      }
+    } else if (!keyword) {
+      return NextResponse.json(
+        { error: `${i + 1}번 항목: 주제/키워드를 입력해주세요.` },
+        { status: 400 },
+      );
+    } else if (effectivePhotoSource === "upload" && files.length === 0) {
+      return NextResponse.json(
+        { error: `${i + 1}번 항목: 직접 촬영한 사진을 최소 1장 올려주세요.` },
+        { status: 400 },
+      );
     }
-    db.prepare("UPDATE ig_posts SET source_image_paths_json = ? WHERE id = ?").run(
-      JSON.stringify(savedPaths),
-      jobId,
-    );
+
+    items.push({ keyword, sourceText, files });
   }
 
-  runIgJob(jobId).catch((e) => console.error("runIgJob error", e));
+  const db = getDb();
+  const batchId = items.length > 1 ? crypto.randomUUID() : null;
+  const ids: number[] = [];
 
-  return NextResponse.json({ id: jobId }, { status: 201 });
+  for (const item of items) {
+    const slideCount = isAdapt
+      ? opts.carouselEnabled
+        ? opts.carouselCount
+        : 1
+      : effectivePhotoSource === "upload"
+        ? item.files.length
+        : opts.carouselEnabled
+          ? opts.carouselCount
+          : 1;
+    const carousel = slideCount > 1 ? 1 : 0;
+    const label = isAdapt
+      ? item.sourceText
+        ? firstLineLabel(item.sourceText)
+        : "이미지 각색"
+      : item.keyword!;
+
+    const result = db
+      .prepare(
+        `INSERT INTO ig_posts
+           (keyword, mode, carousel, slide_count, image_style, photo_source, content_source, source_text, batch_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        label,
+        opts.mode,
+        carousel,
+        slideCount,
+        opts.imageStyle,
+        effectivePhotoSource,
+        opts.contentSource,
+        isAdapt ? (item.sourceText ?? null) : null,
+        batchId,
+      );
+    const jobId = Number(result.lastInsertRowid);
+
+    const savedPaths = await saveItemImages(jobId, item.files);
+    if (savedPaths.length) {
+      db.prepare("UPDATE ig_posts SET source_image_paths_json = ? WHERE id = ?").run(
+        JSON.stringify(savedPaths),
+        jobId,
+      );
+    }
+
+    ids.push(jobId);
+    enqueueJob(() => runIgJob(jobId));
+  }
+
+  return NextResponse.json({ batchId, ids }, { status: 201 });
 }

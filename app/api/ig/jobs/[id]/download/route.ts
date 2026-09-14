@@ -3,10 +3,11 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { buildZipBuffer } from "@/lib/text/zipExport";
+import { buildZipBuffer, type ZipEntry } from "@/lib/text/zipExport";
 
-type IgPostRow = { id: number; caption: string | null; hashtags_json: string | null };
-type IgImageRow = { local_path: string; slide_index: number };
+type IgPostRow = { id: number; caption: string | null };
+type IgImageRow = { local_path: string; slide_index: number; composited_path: string | null };
+type IgTitleRow = { text: string };
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -23,14 +24,23 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       "SELECT * FROM ig_images WHERE ig_post_id = ? AND verdict_ok = 1 ORDER BY slide_index ASC",
     )
     .all(jobId) as IgImageRow[];
+  const chosenTitle = db
+    .prepare("SELECT text FROM ig_titles WHERE ig_post_id = ? AND chosen = 1")
+    .get(jobId) as IgTitleRow | undefined;
 
-  const hashtags: string[] = job.hashtags_json ? JSON.parse(job.hashtags_json) : [];
-  const captionText = [job.caption ?? "", "", hashtags.map((h) => `#${h}`).join(" ")].join("\n");
+  const captionText = chosenTitle
+    ? [chosenTitle.text, "", job.caption ?? ""].join("\n")
+    : (job.caption ?? "");
 
-  const zip = await buildZipBuffer([
-    { content: captionText, name: "caption.txt" },
-    ...images.map((img, i) => ({ path: img.local_path, name: `slide_${i + 1}.jpg` })),
-  ]);
+  const entries: ZipEntry[] = [{ content: captionText, name: "caption.txt" }];
+  images.forEach((img, i) => {
+    entries.push({ path: img.local_path, name: `slide_${i + 1}.jpg` });
+    if (img.composited_path) {
+      entries.push({ path: img.composited_path, name: `slide_${i + 1}_composited.jpg` });
+    }
+  });
+
+  const zip = await buildZipBuffer(entries);
 
   return new NextResponse(new Uint8Array(zip), {
     headers: {

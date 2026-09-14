@@ -1,11 +1,9 @@
 import path from "node:path";
 import { runClaudeJson } from "@/lib/claude";
-import { generateImage } from "@/lib/ai/imagegen";
+import { generateImage, STYLE_TOKENS, NO_TEXT_SUFFIX } from "@/lib/ai/imagegen";
 import { getSettings } from "@/lib/settings";
 import { REELS_IMAGE_DIR } from "@/lib/paths";
 import { ReelsImagePromptResult } from "@/lib/types/reels";
-
-const NO_TEXT_SUFFIX = "no text, no letters, no words, no watermark, no logo";
 
 export type ReelsImageResult =
   | { ok: true; path: string; prompt: string }
@@ -23,9 +21,11 @@ export async function generateReelsImage(input: {
 
 규칙:
 - 영어, 한 문단, 40단어 이내
-- 피사체/구도/조명/배경/질감을 명시
+- 피사체/구도/조명/배경/질감을 명시하되, 카메라로 찍은 듯한 사실적인 장면으로 묘사한다.
+  CG/3D 렌더링/일러스트/애니메이션처럼 보이는 표현은 쓰지 않는다(애니메이션·CG를 의도한 콘텐츠가
+  아닌 한, "AI가 만든 티가 나는" 매끈한 이미지가 아니라 최대한 실사에 가까운 이미지가 목표다).
 - 원문 이미지 속 실존 인물의 얼굴, 특정 브랜드 로고, 영화/드라마 스틸컷, 캐릭터는 그대로 재현하지 않는다 — 구도·컨셉만 참고해 완전히 새로운 장면으로 일반화한다
-- 끝에 반드시 "${NO_TEXT_SUFFIX}" 를 포함한다
+- 끝에 반드시 "${STYLE_TOKENS.photo}, ${NO_TEXT_SUFFIX}" 를 포함한다
 
 릴스 본문:
 ${input.bodyText}

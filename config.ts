@@ -7,9 +7,9 @@ export const DEFAULT_SETTINGS = {
   claudeTimeoutSec: 180, // 30~900
   imageCandidates: 10, // 3~20 (크롤링 이미지 후보 수 — 현재 트랙에서는 미사용, 네이버 트랙 대비 예약)
   cfImageSteps: 6, // 1~8
-  igHashtagMax: 15, // 5~30
   carouselCountDefault: 4, // 2~10
   dailyGenerationLimit: 20, // 1~200, 비용 관리용 소프트 리밋 (계정 안전 목적 아님)
+  batchMax: 20, // 1~50, 한 번에 제출할 수 있는 배치 항목 수 상한
 } as const;
 
 export const SETTINGS_LIMITS: Record<string, { min: number; max: number }> = {
@@ -17,7 +17,7 @@ export const SETTINGS_LIMITS: Record<string, { min: number; max: number }> = {
   claudeTimeoutSec: { min: 30, max: 900 },
   imageCandidates: { min: 3, max: 20 },
   cfImageSteps: { min: 1, max: 8 },
-  igHashtagMax: { min: 5, max: 30 },
   carouselCountDefault: { min: 2, max: 10 },
   dailyGenerationLimit: { min: 1, max: 200 },
+  batchMax: { min: 1, max: 50 },
 };

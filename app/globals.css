@@ -117,6 +117,24 @@ textarea {
   gap: 10px;
 }
 
+/* label + inline action button header above a field */
+.field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0 6px;
+  min-height: 34px;
+}
+
+.field-row label {
+  margin: 0;
+}
+
+.field-row button {
+  flex-shrink: 0;
+}
+
 button {
   background: var(--act);
   color: white;
@@ -125,11 +143,36 @@ button {
   padding: 10px 16px;
   font-size: 14px;
   cursor: pointer;
+  transition: transform 0.12s ease, filter 0.12s ease, box-shadow 0.12s ease, background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+button:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0) scale(0.96);
+  filter: brightness(0.95);
+  box-shadow: none;
+  transition-duration: 0.05s;
 }
 
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button {
+    transition: none;
+  }
+  button:hover:not(:disabled),
+  button:active:not(:disabled) {
+    transform: none;
+  }
 }
 
 button.secondary {
@@ -186,6 +229,40 @@ pre.script {
   object-fit: cover;
   border-radius: 8px;
   border: 1px solid var(--border);
+  cursor: zoom-in;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  z-index: 1000;
+  cursor: zoom-out;
+}
+
+.lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  cursor: default;
+}
+
+.lightbox-close {
+  position: fixed;
+  top: 16px;
+  right: 20px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 32px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 10px;
 }
 
 .log-list {
@@ -316,4 +393,190 @@ pre.script {
 
 .trend-candidate .hint {
   margin-top: 0;
+}
+
+/* 배치 입력: 반복 항목 편집기 */
+.batch-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 6px 0 4px;
+}
+
+.batch-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: #0f1115;
+}
+
+.batch-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.batch-item-no {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.batch-item .chip-remove {
+  font-size: 12px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+/* 작업 목록 카드 */
+.job-card {
+  padding: 14px 16px;
+}
+
+.job-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.job-card-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.badge {
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.badge-pending {
+  color: var(--muted);
+}
+.badge-generating {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.badge-done {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+.badge-failed {
+  color: var(--bad);
+  border-color: var(--bad);
+}
+
+/* 이미지 그리드 안 "편집" 버튼 */
+.image-grid-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.image-grid-item button {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+/* 이미지 편집기(로고·그라데이션·제목 합성) */
+.editor-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1100;
+  overflow-y: auto;
+}
+
+.editor-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  max-width: 900px;
+  width: 100%;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
+.editor-preview {
+  flex: 1 1 320px;
+  min-width: 240px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.editor-preview canvas {
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.editor-controls {
+  flex: 1 1 280px;
+  min-width: 260px;
+}
+
+.editor-nudge-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 44px);
+  grid-template-rows: repeat(2, 44px);
+  gap: 6px;
+  margin: 8px 0 16px;
+}
+
+.editor-nudge-grid button {
+  padding: 0;
+  font-size: 16px;
+}
+
+.editor-nudge-up {
+  grid-column: 2;
+  grid-row: 1;
+}
+.editor-nudge-left {
+  grid-column: 1;
+  grid-row: 2;
+}
+.editor-nudge-right {
+  grid-column: 3;
+  grid-row: 2;
+}
+.editor-nudge-down {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.editor-logo-preview {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  background: #0f1115;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
 }

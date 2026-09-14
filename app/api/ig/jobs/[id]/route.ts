@@ -16,7 +16,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const images = db
     .prepare("SELECT * FROM ig_images WHERE ig_post_id = ? ORDER BY slide_index ASC")
     .all(jobId);
+  const titles = db
+    .prepare("SELECT * FROM ig_titles WHERE ig_post_id = ? ORDER BY candidate_index ASC")
+    .all(jobId);
   const logs = getJobLogs("ig", jobId);
 
-  return NextResponse.json({ job, images, logs });
+  return NextResponse.json({ job, images, titles, logs });
 }

@@ -5,12 +5,17 @@ import { neuronsPerImage } from "@/lib/ai/neurons";
 export type ImageStyle = "photo" | "illust";
 export type Aspect = "square" | "portrait4x5" | "story9x16";
 
-const STYLE_TOKENS: Record<ImageStyle, string> = {
-  photo: "photorealistic photograph, natural lighting, shallow depth of field, 50mm lens, high detail",
+// photo 톤은 "AI가 만든 티가 나는" 매끈한 CG/렌더링 느낌을 피하고 최대한 실사에 가깝게 만드는 게
+// 목표다(사용자 피드백). "photorealistic, high detail" 정도로는 디퓨전 모델 특유의 매끈한 광택이
+// 남기 쉬워서, 카메라로 찍은 듯한 질감·조명과 "CG/렌더링/일러스트/애니메이션이 아님"을 명시한다.
+// illust는 의도적으로 선택한 스타일이라 그대로 둔다.
+export const STYLE_TOKENS: Record<ImageStyle, string> = {
+  photo:
+    "candid photorealistic photo, shot on a real camera, natural ambient lighting, realistic skin and material texture, shallow depth of field, documentary style, unretouched — not CGI, not 3D render, not digital art, not illustration, not anime",
   illust: "clean flat vector illustration, simple shapes, soft muted color palette, minimal, lots of white space",
 };
 
-const NO_TEXT_SUFFIX = "no text, no letters, no words, no watermark, no logo";
+export const NO_TEXT_SUFFIX = "no text, no letters, no words, no watermark, no logo";
 
 export function buildImagePrompt(sceneDescription: string, style: ImageStyle): string {
   return `${sceneDescription}, ${STYLE_TOKENS[style]}, ${NO_TEXT_SUFFIX}`;

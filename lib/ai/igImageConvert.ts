@@ -1,16 +1,9 @@
 import path from "node:path";
 import { runClaudeJson } from "@/lib/claude";
-import { generateImage, type ImageStyle } from "@/lib/ai/imagegen";
+import { generateImage, STYLE_TOKENS, NO_TEXT_SUFFIX, type ImageStyle } from "@/lib/ai/imagegen";
 import { getSettings } from "@/lib/settings";
 import { IG_IMAGE_DIR } from "@/lib/paths";
 import { ReelsImagePromptResult } from "@/lib/types/reels";
-
-const NO_TEXT_SUFFIX = "no text, no letters, no words, no watermark, no logo";
-
-const STYLE_HINT: Record<ImageStyle, string> = {
-  photo: "photorealistic photograph, natural lighting, shallow depth of field, 50mm lens, high detail",
-  illust: "clean flat vector illustration, simple shapes, soft muted color palette, minimal, lots of white space",
-};
 
 export type IgImageConvertResult =
   | { ok: true; path: string; prompt: string }
@@ -34,7 +27,7 @@ FLUX 프롬프트를 영어로 설계하라.
 - 영어, 한 문단, 40단어 이내
 - 피사체/구도/조명/배경/질감을 명시하되, 사진 속 실존 인물의 얼굴·특정 브랜드 로고·상표·워터마크·
   계정명은 그대로 재현하지 않는다 — 컨셉만 참고해 일반화한다
-- 스타일 톤: ${STYLE_HINT[input.style]}
+- 스타일 톤: ${STYLE_TOKENS[input.style]}
 - 끝에 반드시 "${NO_TEXT_SUFFIX}" 를 포함한다
 
 JSON 스키마로만 응답: { "prompt": string }
